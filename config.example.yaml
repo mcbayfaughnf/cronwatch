@@ -1,0 +1,30 @@
+# cronwatch configuration example
+# Copy to config.yaml and adjust as needed.
+
+# Global webhook URL for alerts (can be overridden per job)
+webhook_url: "https://hooks.example.com/your-webhook-id"
+
+# How often (in seconds) cronwatch checks job statuses
+check_interval: 60
+
+# Logging verbosity: DEBUG, INFO, WARNING, ERROR
+log_level: INFO
+
+jobs:
+  - name: daily-backup
+    # Standard cron expression
+    schedule: "0 2 * * *"
+    # Max allowed runtime in seconds before alerting (default: 3600)
+    timeout: 7200
+    # Seconds past scheduled time before flagging as missed (default: 60)
+    grace_period: 300
+
+  - name: hourly-sync
+    schedule: "0 * * * *"
+    timeout: 600
+    # Override global webhook for this specific job
+    webhook_url: "https://hooks.example.com/another-webhook"
+
+  - name: weekly-report
+    schedule: "0 9 * * 1"
+    grace_period: 600

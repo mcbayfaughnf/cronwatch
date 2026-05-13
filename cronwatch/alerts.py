@@ -1,12 +1,11 @@
-"""Alert sending via webhook for missed or long-running cron jobs."""
+"""Alert construction and delivery for cronwatch."""
 
 import json
 import logging
-import urllib.request
-import urllib.error
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Dict, Optional
+from urllib import request, error
 
 logger = logging.getLogger(__name__)
 
@@ -14,55 +13,45 @@ logger = logging.getLogger(__name__)
 class AlertType(str, Enum):
     MISSED = "missed"
     LONG_RUNNING = "long_running"
-    RECOVERED = "recovered"
+    REPORT = "report"
 
 
 @dataclass
 class Alert:
-    job_name: str
     alert_type: AlertType
+    job_name: str
     message: str
-    runtime_seconds: Optional[float] = None
-    threshold_seconds: Optional[float] = None
+    payload: Dict[str, Any] = field(default_factory=dict)
 
 
-def build_payload(alert: Alert) -> dict:
-    """Build the JSON payload for a webhook POST request."""
-    payload = {
-        "job": alert.job_name,
+def build_payload(alert: Alert) -> Dict[str, Any]:
+    """Construct the JSON payload for a webhook delivery."""
+    base = {
         "alert_type": alert.alert_type.value,
+        "job_name": alert.job_name,
         "message": alert.message,
     }
-    if alert.runtime_seconds is not None:
-        payload["runtime_seconds"] = alert.runtime_seconds
-    if alert.threshold_seconds is not None:
-        payload["threshold_seconds"] = alert.threshold_seconds
-    return payload
+    base.update(alert.payload)
+    return base
 
 
-def send_alert(webhook_url: str, alert: Alert, timeout: int = 10) -> bool:
-    """Send an alert to the configured webhook URL.
-
-    Returns True if the alert was delivered successfully, False otherwise.
-    """
+def send_alert(webhook_url: str, alert: Alert, timeout: int = 10) -> None:
+    """Send an alert payload to the configured webhook URL."""
     payload = build_payload(alert)
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
+    req = request.Request(
         webhook_url,
         data=data,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with request.urlopen(req, timeout=timeout) as resp:
             status = resp.status
-            if status < 300:
-                logger.info("Alert sent for job '%s' (%s)", alert.job_name, alert.alert_type.value)
-                return True
-            logger.warning(
-                "Webhook returned unexpected status %d for job '%s'", status, alert.job_name
-            )
-            return False
-    except urllib.error.URLError as exc:
-        logger.error("Failed to send alert for job '%s': %s", alert.job_name, exc)
-        return False
+            logger.debug("Alert sent to %s — HTTP %s", webhook_url, status)
+    except error.HTTPError as exc:
+        logger.error("HTTP error sending alert: %s %s", exc.code, exc.reason)
+        raise
+    except error.URLError as exc:
+        logger.error("URL error sending alert: %s", exc.reason)
+        raise

@@ -1,53 +1,52 @@
-"""Configuration loader for cronwatch."""
+"""Configuration loading for cronwatch."""
 
-import os
-import yaml
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
+
+import yaml
 
 
 @dataclass
 class JobConfig:
     name: str
     schedule: str
-    timeout: int = 3600  # seconds
-    grace_period: int = 60  # seconds allowed past expected run time
-    webhook_url: Optional[str] = None
+    max_runtime: Optional[int] = None   # seconds
+    missed_after: Optional[int] = None  # seconds
+    enabled: bool = True
 
 
 @dataclass
 class CronwatchConfig:
-    webhook_url: Optional[str] = None
-    check_interval: int = 60  # seconds between checks
-    log_level: str = "INFO"
-    jobs: List[JobConfig] = field(default_factory=list)
+    webhook_url: Optional[str]
+    check_interval: int
+    log_path: str
+    report_interval: Optional[int]
+    jobs: Dict[str, JobConfig] = field(default_factory=dict)
+
+
+def _parse_job(name: str, raw: dict) -> JobConfig:
+    return JobConfig(
+        name=name,
+        schedule=raw.get("schedule", ""),
+        max_runtime=raw.get("max_runtime"),
+        missed_after=raw.get("missed_after"),
+        enabled=raw.get("enabled", True),
+    )
 
 
 def load_config(path: str) -> CronwatchConfig:
-    """Load and parse a YAML config file into a CronwatchConfig."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Config file not found: {path}")
+    """Load and parse a YAML configuration file."""
+    with open(path, "r") as fh:
+        raw = yaml.safe_load(fh)
 
-    with open(path, "r") as f:
-        raw = yaml.safe_load(f)
-
-    if raw is None:
-        raise ValueError("Config file is empty or invalid YAML.")
-
-    jobs = [
-        JobConfig(
-            name=j["name"],
-            schedule=j["schedule"],
-            timeout=j.get("timeout", 3600),
-            grace_period=j.get("grace_period", 60),
-            webhook_url=j.get("webhook_url"),
-        )
-        for j in raw.get("jobs", [])
-    ]
+    jobs: Dict[str, JobConfig] = {}
+    for name, job_raw in (raw.get("jobs") or {}).items():
+        jobs[name] = _parse_job(name, job_raw or {})
 
     return CronwatchConfig(
         webhook_url=raw.get("webhook_url"),
-        check_interval=raw.get("check_interval", 60),
-        log_level=raw.get("log_level", "INFO"),
+        check_interval=int(raw.get("check_interval", 60)),
+        log_path=raw.get("log_path", "/var/log/cron"),
+        report_interval=raw.get("report_interval"),
         jobs=jobs,
     )

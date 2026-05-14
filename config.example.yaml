@@ -1,30 +1,31 @@
-# cronwatch configuration example
-# Copy to config.yaml and adjust as needed.
+# cronwatch example configuration
 
-# Global webhook URL for alerts (can be overridden per job)
-webhook_url: "https://hooks.example.com/your-webhook-id"
+webhook_url: "https://hooks.example.com/services/XXXXX"
+check_interval: 60          # seconds between checks
+report_interval: 3600       # seconds between summary reports
 
-# How often (in seconds) cronwatch checks job statuses
-check_interval: 60
-
-# Logging verbosity: DEBUG, INFO, WARNING, ERROR
-log_level: INFO
+# Retention settings
+retention:
+  max_age_seconds: 604800   # keep run history for 7 days
+  prune_interval: 3600      # run the pruner at most once per hour
 
 jobs:
-  - name: daily-backup
-    # Standard cron expression
-    schedule: "0 2 * * *"
-    # Max allowed runtime in seconds before alerting (default: 3600)
-    timeout: 7200
-    # Seconds past scheduled time before flagging as missed (default: 60)
-    grace_period: 300
+  - name: daily_backup
+    schedule: "0 2 * * *"   # cron expression (informational)
+    max_runtime: 1800        # alert if running longer than 30 min
+    missed_after: 90000      # alert if not seen within 25 h
 
-  - name: hourly-sync
+  - name: hourly_sync
     schedule: "0 * * * *"
-    timeout: 600
-    # Override global webhook for this specific job
-    webhook_url: "https://hooks.example.com/another-webhook"
+    max_runtime: 300
+    missed_after: 4500
 
-  - name: weekly-report
-    schedule: "0 9 * * 1"
-    grace_period: 600
+  - name: weekly_report
+    schedule: "0 8 * * 1"
+    max_runtime: 600
+    missed_after: 612000     # ~7 days + buffer
+
+  - name: health_ping
+    schedule: "*/5 * * * *"
+    max_runtime: 30
+    missed_after: 600

@@ -1,67 +1,69 @@
-"""Persistent job run history: stores recent runtimes per job for trend analysis."""
+"""Per-job run history: record completed runs and query aggregate stats."""
 
 import time
-from collections import deque
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Optional
 
-# (start_ts, end_ts, runtime_seconds)
-RunRecord = Tuple[float, float, float]
-
-_MAX_HISTORY = 50  # max records kept per job
-
-_history: Dict[str, Deque[RunRecord]] = {}
+# Internal store: job_name -> list of {finished_at, duration}
+_runs: dict = {}
 
 
-def _ensure(job_name: str) -> Deque[RunRecord]:
-    if job_name not in _history:
-        _history[job_name] = deque(maxlen=_MAX_HISTORY)
-    return _history[job_name]
+def _ensure(job_name: str) -> None:
+    """Initialise the store entry for *job_name* if absent."""
+    if job_name not in _runs:
+        _runs[job_name] = []
 
 
-def record_run(job_name: str, start_ts: float, end_ts: float) -> None:
-    """Record a completed run for a job."""
-    runtime = end_ts - start_ts
-    _ensure(job_name).append((start_ts, end_ts, runtime))
+def reset() -> None:
+    """Clear all recorded history (used in tests)."""
+    _runs.clear()
 
 
-def get_runs(job_name: str) -> List[RunRecord]:
-    """Return all stored run records for a job (oldest first)."""
-    return list(_ensure(job_name))
+def record_run(job_name: str, duration: float) -> None:
+    """Append a completed run record for *job_name*."""
+    _ensure(job_name)
+    _runs[job_name].append({
+        "finished_at": time.time(),
+        "duration": duration,
+    })
 
 
-def average_runtime(job_name: str) -> Optional[float]:
-    """Return average runtime in seconds, or None if no history."""
-    runs = get_runs(job_name)
-    if not runs:
-        return None
-    return sum(r[2] for r in runs) / len(runs)
-
-
-def last_runtime(job_name: str) -> Optional[float]:
-    """Return the most recent runtime in seconds, or None."""
-    runs = get_runs(job_name)
-    if not runs:
-        return None
-    return runs[-1][2]
-
-
-def last_start(job_name: str) -> Optional[float]:
-    """Return the most recent start timestamp, or None."""
-    runs = get_runs(job_name)
-    if not runs:
-        return None
-    return runs[-1][0]
+def get_runs(job_name: str) -> list:
+    """Return all recorded runs for *job_name* (oldest first)."""
+    return list(_runs.get(job_name, []))
 
 
 def run_count(job_name: str) -> int:
-    """Return the number of stored runs for a job."""
-    return len(_ensure(job_name))
+    """Return the total number of recorded runs for *job_name*."""
+    return len(_runs.get(job_name, []))
 
 
-def reset(job_name: Optional[str] = None) -> None:
-    """Clear history for a specific job or all jobs."""
-    global _history
-    if job_name is None:
-        _history.clear()
-    else:
-        _history.pop(job_name, None)
+def average_runtime(job_name: str) -> Optional[float]:
+    """Return the mean duration across all recorded runs, or None if no data."""
+    runs = _runs.get(job_name, [])
+    if not runs:
+        return None
+    return sum(r["duration"] for r in runs) / len(runs)
+
+
+def last_runtime(job_name: str) -> Optional[float]:
+    """Return the duration of the most recent run, or None if no data."""
+    runs = _runs.get(job_name, [])
+    if not runs:
+        return None
+    return runs[-1]["duration"]
+
+
+def last_finished_at(job_name: str) -> Optional[float]:
+    """Return the finish timestamp of the most recent run, or None."""
+    runs = _runs.get(job_name, [])
+    if not runs:
+        return None
+    return runs[-1]["finished_at"]
+
+
+def max_runtime(job_name: str) -> Optional[float]:
+    """Return the maximum recorded duration, or None if no data."""
+    runs = _runs.get(job_name, [])
+    if not runs:
+        return None
+    return max(r["duration"] for r in runs)

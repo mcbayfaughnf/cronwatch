@@ -40,6 +40,16 @@ def is_trending_up(job_name: str, window: int = 10, threshold: float = 1.0) -> b
     return slope is not None and slope > threshold
 
 
+def is_trending_down(job_name: str, window: int = 10, threshold: float = 1.0) -> bool:
+    """Return True if runtimes are decreasing by more than `threshold` sec/run.
+
+    A negative slope whose absolute value exceeds `threshold` indicates a
+    consistent improvement in job performance over the sampled window.
+    """
+    slope = trend_slope(job_name, window)
+    return slope is not None and slope < -threshold
+
+
 def trend_summary(job_name: str, window: int = 10) -> dict:
     """Return a dict summarising the trend for a job."""
     runtimes = _recent_runtimes(job_name, window)
@@ -49,6 +59,7 @@ def trend_summary(job_name: str, window: int = 10) -> dict:
         "samples": len(runtimes),
         "slope": slope,
         "trending_up": is_trending_up(job_name, window),
+        "trending_down": is_trending_down(job_name, window),
         "min_runtime": min(runtimes) if runtimes else None,
         "max_runtime": max(runtimes) if runtimes else None,
     }

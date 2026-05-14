@@ -60,3 +60,20 @@ def maybe_prune(job_names: list, max_age_seconds: float, interval_seconds: int) 
     """Prune old history if the prune interval has elapsed."""
     if is_prune_due(interval_seconds):
         prune_all(job_names, max_age_seconds)
+
+
+def prune_summary(job_names: list, max_age_seconds: float) -> str:
+    """Return a human-readable summary of what would be pruned without modifying any data.
+
+    Useful for dry-run checks or logging before committing a prune.
+    """
+    cutoff = time.time() - max_age_seconds
+    lines = []
+    for name in job_names:
+        runs = history.get_runs(name)
+        stale = [r for r in runs if r["finished_at"] < cutoff]
+        if stale:
+            lines.append(f"  {name}: {len(stale)} of {len(runs)} run(s) would be removed")
+    if not lines:
+        return "No runs eligible for pruning."
+    return "Prune preview:\n" + "\n".join(lines)
